@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Hóa Đơn Tiền Điện</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e9ecef;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .invoice-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        #summary {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f1f3f5;
+            border-radius: 8px;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        @media print {
+            .controls {
+                display: none;
+            }
+
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .invoice-container {
+                box-shadow: none;
+                padding: 10px;
+            }
+        }
+
+        #invoice-table thead th {
+            position: sticky;
+            top: 0;
+            background-color: #3498db;
+            color: white;
+            z-index: 10;
+        }
+
+        select {
+            font-size: 16px;
+            /* chữ to dễ nhìn */
+            padding: 8px 12px;
+            /* khoảng cách rộng để dễ bấm */
+            border-radius: 6px;
+            /* bo góc mềm mại */
+            border: 1px solid #ccc;
+            background: #fff;
+        }
+
+        label {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* Responsive cho mobile */
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .invoice-container {
+                padding: 15px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            select {
+                font-size: 18px;
+                /* chữ lớn hơn trên mobile */
+                padding: 10px 14px;
+                width: 120px;
+                /* đủ rộng không bị chật */
+            }
+
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="invoice-container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <h1 style="margin: 0 auto;">HÓA ĐƠN TIỀN ĐIỆN KHU 35</h1>
+            <span id="selected-date" style="font-size: 18px; font-weight: normal; margin-top: 10px;" hidden>
+            </span>
+        </div>
+
+        <div class="controls">
+            <div style="display: flex; justify-content: center; gap: 10px; align-items: center; margin-bottom:20px;">
+                <label for="month">Tháng: </label>
+                <select id="month">
+                    <option value="1">Tháng 1</option>
+                    <option value="2">Tháng 2</option>
+                    <option value="3">Tháng 3</option>
+                    <option value="4">Tháng 4</option>
+                    <option value="5">Tháng 5</option>
+                    <option value="6">Tháng 6</option>
+                    <option value="7">Tháng 7</option>
+                    <option value="8">Tháng 8</option>
+                    <option value="9">Tháng 9</option>
+                    <option value="10">Tháng 10</option>
+                    <option value="11">Tháng 11</option>
+                    <option value="12">Tháng 12</option>
+                </select>
+
+                <label for="year">Năm: 2025</label>
+                <select id="year" hidden></select>
+            </div>
+        </div>
+
+        <table id="invoice-table">
+            <thead>
+                <tr>
+                    <th>Căn Hộ</th>
+                    <th>Số Cũ</th>
+                    <th>Số Mới</th>
+                    <th>Tiêu Thụ (kWh)</th>
+                    <th>Thành tiền (VND)</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <!-- Tổng kết -->
+        <div id="summary"></div>
+    </div>
+
+    <script>
+        const API_KEY = "AIzaSyCRARR8Ur60LdaBdwrXz2syrRfigw_cqVY";
+        const SPREADSHEET_ID = "1l6nkNyDozTLCfbYb-F71QDmeEZ4ybTbOU9kvfpf3TzY";
+
+        function getColumnFromMonth(month) {
+            return month + 1; // cột B là tháng 1
+        }
+
+        function updateTitle() {
+            const month = document.getElementById("month").value;
+            const year = document.getElementById("year").value;
+            document.getElementById("selected-date").textContent = `Tháng ${month}/${year}`;
+        }
+
+        async function loadData() {
+            const month = parseInt(document.getElementById("month").value);
+            const year = document.getElementById("year").value;
+
+            updateTitle();
+
+            const colIndex = getColumnFromMonth(month);
+            const colLetter = String.fromCharCode(64 + colIndex);
+
+            const range = `${year}!A:${colLetter}`;
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?key=${API_KEY}`;
+
+            const res = await fetch(url);
+            const data = await res.json();
+
+            const tbody = document.querySelector("#invoice-table tbody");
+            tbody.innerHTML = "";
+
+            let totalKwh = 0;
+            let totalCollected = 0;
+            let totalMoneyFromSheet = 0;
+
+            if (data.values) {
+                // Tính tổng kWh trước
+                data.values.slice(1, 36).forEach(row => {
+                    let soCu = parseInt(row[colIndex - 2] || 0);
+                    let soMoi = parseInt(row[colIndex - 1] || 0);
+                    let tieuThu = soMoi - soCu;
+                    totalKwh += tieuThu;
+                });
+
+                // Lấy tổng tiền hóa đơn từ row 38 trong sheet
+                let row38 = data.values[38];
+                totalMoneyFromSheet = parseInt(row38 ? row38[colIndex - 1] || 0 : 0);
+
+                // Giá trung bình
+                let avgPrice = totalKwh > 0 ? totalMoneyFromSheet / totalKwh : 0;
+
+                // Render lại bảng theo giá trung bình
+                data.values.slice(1, 36).forEach((row, idx) => {
+                    let rowNumber = idx + 2;
+
+                    let soCu = parseInt(row[colIndex - 2] || 0);
+                    let soMoi = parseInt(row[colIndex - 1] || 0);
+                    let tieuThu = soMoi - soCu;
+
+                    let giaThanh = tieuThu * avgPrice;
+
+                    // làm tròn theo bội 500
+                    let giaThanhRounded = Math.ceil(giaThanh / 1000) * 1000;
+                    let displayGiaThanh = (giaThanhRounded / 1000).toLocaleString("vi-VN") + "K";
+
+                    totalCollected += giaThanhRounded;
+
+                    let tr = document.createElement("tr");
+                    if (displayGiaThanh === "0K" || displayGiaThanh.includes("-")) displayGiaThanh = "--";
+
+                    if (tieuThu.toString().includes("-") || tieuThu === 0) tieuThu = "--";
+                    if (soMoi === 0) soMoi = "--";
+                    if (soCu === 0) soCu = "--";
+
+                    tr.innerHTML = `
+    <td>${row[0] || ""}</td>
+        <td>${soCu !== "--" ? soCu : "--"}</td>
+    <td>${soMoi !== "--" ? soMoi : "--"}</td>
+    <td>${tieuThu !== "--" ? tieuThu : "--"}</td>
+    <td>${displayGiaThanh !== "--" ? displayGiaThanh + " + 10K" : "--"}</td>
+`;
+                    tbody.appendChild(tr);
+                });
+
+                function formatValue(val, suffix = "") {
+                    return (val <= 0) ? "--" : val.toLocaleString("vi-VN") + suffix;
+                }
+
+                document.getElementById("summary").innerHTML = `
+    <b>Tổng KWh tháng này:</b> ${formatValue(totalKwh, " kWh")} <br>
+    <b>Giá Trung bình:</b> ${formatValue(Math.round(avgPrice), "đ / 1kWh")} <br>
+    <b>Tổng tiền hóa đơn (MOMO):</b> ${formatValue(totalMoneyFromSheet, "đ")} <br>
+    <b>Tổng tiền thu được (sau làm tròn):</b> ${formatValue(totalCollected, "đ")}
+`;
+            }
+        }
+
+        window.onload = function () {
+            let now = new Date();
+            let month = now.getMonth() + 1;
+            let year = now.getFullYear();
+
+            if (month === 1) {
+                month = 12;
+                year -= 1;
+            } else {
+                month -= 1;
+            }
+
+            let yearSelect = document.getElementById("year");
+            for (let y = 2023; y <= 2026; y++) {
+                let opt = document.createElement("option");
+                opt.value = y;
+                opt.textContent = y;
+                if (y === year) opt.selected = true;
+                yearSelect.appendChild(opt);
+            }
+
+            document.getElementById("month").value = month;
+            document.getElementById("month").addEventListener("change", loadData);
+            document.getElementById("year").addEventListener("change", loadData);
+
+            loadData();
+        }
+        function isInViewport(el) {
+            const rect = el.getBoundingClientRect();
+            return (
+                rect.top < window.innerHeight &&
+                rect.bottom >= 0
+            );
+        }
+
+        window.addEventListener("scroll", function () {
+            const table = document.getElementById("invoice-table");
+            if (isInViewport(table) && !table.dataset.loaded) {
+                loadData();
+                table.dataset.loaded = "true"; // để không gọi lại nhiều lần
+            }
+        });
+    </script>
+</body>
+
+</html>
